@@ -1,0 +1,353 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Default Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global Security & Validation Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidStringList(arr, maxSize) {
+      return arr is list && arr.size() <= maxSize && (arr.size() == 0 || arr[0] is string);
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == 'docmahamkhalid@gmail.com' && request.auth.token.email_verified == true) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // 3. Entity Validation Blueprints (Anti-Update-Gap)
+    function isValidUserProfile(data, userId) {
+      return data.uid == userId &&
+        isValidString(data.displayName, 1, 80) &&
+        (!('email' in data) || data.email == null || isValidString(data.email, 0, 150)) &&
+        (!('photoURL' in data) || data.photoURL == null || isValidString(data.photoURL, 0, 500)) &&
+        isValidString(data.country, 2, 60) &&
+        data.language in ['en', 'ur', 'hi', 'ar'] &&
+        data.theme in ['system', 'light', 'dark'] &&
+        data.subscriptionType in ['free', 'premium', 'family'] &&
+        data.accountStatus in ['active', 'pending_deletion'] &&
+        data.saveHistory is bool &&
+        (!('notifSecurityAlerts' in data) || data.notifSecurityAlerts is bool) &&
+        (!('notifFamilyWarnings' in data) || data.notifFamilyWarnings is bool) &&
+        (!('notifTrends' in data) || data.notifTrends is bool) &&
+        (!('notifEducational' in data) || data.notifEducational is bool) &&
+        (!('onboardingCompleted' in data) || data.onboardingCompleted is bool) &&
+        (!('completedLessons' in data) || isValidStringList(data.completedLessons, 20));
+    }
+
+    function isValidScanRecord(data, userId) {
+      return data.userId == userId &&
+        data.scanType in ['message', 'website', 'phone', 'screenshot'] &&
+        isValidString(data.inputPreview, 1, 200) &&
+        data.riskLevel in ['low', 'caution', 'high', 'critical', 'unable_to_verify'] &&
+        data.riskScore is int && data.riskScore >= 0 && data.riskScore <= 100 &&
+        data.confidence in ['high', 'medium', 'low'] &&
+        isValidString(data.category, 1, 60) &&
+        isValidString(data.summary, 1, 600) &&
+        isValidStringList(data.warningSigns, 15) &&
+        isValidStringList(data.evidenceObservations, 15) &&
+        isValidString(data.recommendation, 1, 500) &&
+        isValidStringList(data.verificationSteps, 10) &&
+        data.verificationStatus in ['confirmed_malicious', 'suspicious', 'no_known_threat', 'unable_to_verify'] &&
+        (!('country' in data) || isValidString(data.country, 2, 60));
+    }
+
+    function isValidFamilyGroup(data) {
+      return isValidString(data.ownerId, 1, 128) &&
+        isValidString(data.name, 2, 60) &&
+        data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 5 && data.memberUids[0] is string &&
+        data.memberLabels is list && data.memberLabels.size() >= 1 && data.memberLabels.size() <= 5 && data.memberLabels[0] is string;
+    }
+
+    function isValidSharedFamilyAlert(data, groupId) {
+      return data.groupId == groupId &&
+        isValidString(data.senderUid, 1, 128) &&
+        isValidString(data.senderName, 1, 80) &&
+        data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 5 && data.memberUids[0] is string &&
+        data.scanType in ['message', 'website', 'phone', 'screenshot'] &&
+        data.riskLevel in ['low', 'caution', 'high', 'critical', 'unable_to_verify'] &&
+        data.riskScore is int && data.riskScore >= 0 && data.riskScore <= 100 &&
+        isValidString(data.category, 1, 60) &&
+        isValidString(data.privacySafeSummary, 1, 500) &&
+        isValidStringList(data.warningSigns, 10) &&
+        isValidString(data.recommendation, 1, 400);
+    }
+
+    function isValidInvitation(data) {
+      return isValidId(data.groupId) &&
+        isValidString(data.groupName, 2, 60) &&
+        isValidString(data.inviterUid, 1, 128) &&
+        isValidString(data.inviterName, 1, 80) &&
+        isValidString(data.inviteeEmail, 3, 150) &&
+        data.status in ['pending', 'accepted', 'declined'];
+    }
+
+    function isValidScamReport(data) {
+      return isValidString(data.userId, 1, 128) &&
+        data.reportType in ['phone', 'scam_pattern', 'incorrect_scan'] &&
+        isValidString(data.category, 1, 60) &&
+        isValidString(data.normalizedTarget, 1, 200) &&
+        isValidString(data.country, 2, 60) &&
+        isValidString(data.description, 1, 600) &&
+        data.moderationStatus in ['pending', 'approved', 'rejected'];
+    }
+
+    function isValidScamAlert(data) {
+      return isValidString(data.title, 3, 120) &&
+        isValidString(data.explanation, 5, 600) &&
+        isValidString(data.country, 2, 60) &&
+        isValidString(data.category, 1, 60) &&
+        data.sourceType in ['community_moderated', 'verified_intelligence'] &&
+        data.reportCount is int && data.reportCount >= 0 && data.reportCount <= 1000000 &&
+        isValidStringList(data.warningSigns, 10) &&
+        isValidString(data.recommendedAction, 3, 400) &&
+        data.moderationStatus in ['approved', 'archived'];
+    }
+
+    // 4. Collection Rules
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && request.auth.uid == adminId;
+      allow list, create, update, delete: if false;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isSignedIn() &&
+        isValidId(userId) &&
+        request.auth.uid == userId &&
+        incoming().uid == request.auth.uid &&
+        incoming().subscriptionType == 'free' &&
+        incoming().accountStatus == 'active' &&
+        incoming().keys().hasAll(['uid', 'displayName', 'country', 'language', 'theme', 'subscriptionType', 'accountStatus', 'saveHistory', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['uid', 'displayName', 'email', 'photoURL', 'country', 'language', 'theme', 'subscriptionType', 'accountStatus', 'saveHistory', 'notifSecurityAlerts', 'notifFamilyWarnings', 'notifTrends', 'notifEducational', 'onboardingCompleted', 'completedLessons', 'createdAt', 'updatedAt']) &&
+        isValidTimestamp(incoming().createdAt) &&
+        isValidTimestamp(incoming().updatedAt) &&
+        isValidUserProfile(incoming(), userId);
+
+      allow update: if isSignedIn() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        isValidTimestamp(incoming().updatedAt) && (
+          isAdmin() ||
+          (
+            request.auth.uid == userId &&
+            incoming().subscriptionType == existing().subscriptionType &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'photoURL', 'country', 'language', 'theme', 'accountStatus', 'saveHistory', 'notifSecurityAlerts', 'notifFamilyWarnings', 'notifTrends', 'notifEducational', 'onboardingCompleted', 'completedLessons', 'updatedAt'])
+          )
+        );
+
+      allow delete: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+
+      match /scans/{scanId} {
+        allow get: if isSignedIn() && isValidId(scanId) && request.auth.uid == userId;
+        allow list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+          isValidId(scanId) &&
+          request.auth.uid == userId &&
+          incoming().userId == request.auth.uid &&
+          incoming().keys().hasAll(['userId', 'scanType', 'inputPreview', 'riskLevel', 'riskScore', 'confidence', 'category', 'summary', 'warningSigns', 'evidenceObservations', 'recommendation', 'verificationSteps', 'verificationStatus', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'scanType', 'inputPreview', 'riskLevel', 'riskScore', 'confidence', 'category', 'summary', 'warningSigns', 'evidenceObservations', 'recommendation', 'verificationSteps', 'verificationStatus', 'country', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidScanRecord(incoming(), userId);
+
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(scanId) && request.auth.uid == userId;
+      }
+    }
+
+    match /familyGroups/{groupId} {
+      allow get: if isSignedIn() && isValidId(groupId) && (request.auth.uid in existing().memberUids || existing().ownerId == request.auth.uid);
+      allow list: if isSignedIn() && (request.auth.uid in resource.data.memberUids || resource.data.ownerId == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+        isValidId(groupId) &&
+        incoming().ownerId == request.auth.uid &&
+        request.auth.uid in incoming().memberUids &&
+        incoming().memberUids.size() == 1 &&
+        incoming().memberLabels.size() == 1 &&
+        incoming().keys().hasAll(['ownerId', 'name', 'memberUids', 'memberLabels', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['ownerId', 'name', 'memberUids', 'memberLabels', 'createdAt', 'updatedAt']) &&
+        isValidTimestamp(incoming().createdAt) &&
+        isValidTimestamp(incoming().updatedAt) &&
+        isValidFamilyGroup(incoming());
+
+      allow update: if isSignedIn() &&
+        isValidId(groupId) &&
+        isValidFamilyGroup(incoming()) &&
+        incoming().ownerId == existing().ownerId &&
+        existing().ownerId in incoming().memberUids &&
+        incoming().createdAt == existing().createdAt &&
+        isValidTimestamp(incoming().updatedAt) && (
+          (
+            existing().ownerId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'memberUids', 'memberLabels', 'updatedAt'])
+          ) ||
+          (
+            request.auth.uid != existing().ownerId &&
+            !(request.auth.uid in existing().memberUids) &&
+            request.auth.uid in incoming().memberUids &&
+            incoming().memberUids.size() == existing().memberUids.size() + 1 &&
+            incoming().memberUids.hasAll(existing().memberUids) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'memberLabels', 'updatedAt'])
+          ) ||
+          (
+            request.auth.uid != existing().ownerId &&
+            request.auth.uid in existing().memberUids &&
+            !(request.auth.uid in incoming().memberUids) &&
+            existing().memberUids.hasAll(incoming().memberUids) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'memberLabels', 'updatedAt'])
+          )
+        );
+
+      allow delete: if isSignedIn() && isValidId(groupId) && existing().ownerId == request.auth.uid;
+
+      match /sharedAlerts/{alertId} {
+        allow get: if isSignedIn() && isValidId(alertId) && request.auth.uid in existing().memberUids;
+        allow list: if isSignedIn() && request.auth.uid in resource.data.memberUids;
+
+        allow create: if isSignedIn() &&
+          isValidId(alertId) &&
+          incoming().senderUid == request.auth.uid &&
+          request.auth.uid in incoming().memberUids &&
+          incoming().keys().hasAll(['groupId', 'senderUid', 'senderName', 'memberUids', 'scanType', 'riskLevel', 'riskScore', 'category', 'privacySafeSummary', 'warningSigns', 'recommendation', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['groupId', 'senderUid', 'senderName', 'memberUids', 'scanType', 'riskLevel', 'riskScore', 'category', 'privacySafeSummary', 'warningSigns', 'recommendation', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidSharedFamilyAlert(incoming(), groupId) &&
+          exists(/databases/$(database)/documents/familyGroups/$(groupId)) &&
+          request.auth.uid in get(/databases/$(database)/documents/familyGroups/$(groupId)).data.memberUids;
+
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(alertId) && (
+          existing().senderUid == request.auth.uid ||
+          (exists(/databases/$(database)/documents/familyGroups/$(groupId)) &&
+            get(/databases/$(database)/documents/familyGroups/$(groupId)).data.ownerId == request.auth.uid)
+        );
+      }
+    }
+
+    match /familyInvitations/{invitationId} {
+      allow get: if isSignedIn() && isValidId(invitationId) && (
+        existing().inviterUid == request.auth.uid ||
+        (request.auth.token.email != null && request.auth.token.email_verified == true && existing().inviteeEmail == request.auth.token.email)
+      );
+      allow list: if isSignedIn() && (
+        resource.data.inviterUid == request.auth.uid ||
+        (request.auth.token.email != null && request.auth.token.email_verified == true && resource.data.inviteeEmail == request.auth.token.email)
+      );
+
+      allow create: if isSignedIn() &&
+        isValidId(invitationId) &&
+        incoming().inviterUid == request.auth.uid &&
+        incoming().status == 'pending' &&
+        incoming().keys().hasAll(['groupId', 'groupName', 'inviterUid', 'inviterName', 'inviteeEmail', 'status', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['groupId', 'groupName', 'inviterUid', 'inviterName', 'inviteeEmail', 'status', 'createdAt', 'updatedAt']) &&
+        isValidTimestamp(incoming().createdAt) &&
+        isValidTimestamp(incoming().updatedAt) &&
+        isValidInvitation(incoming()) &&
+        exists(/databases/$(database)/documents/familyGroups/$(incoming().groupId)) &&
+        get(/databases/$(database)/documents/familyGroups/$(incoming().groupId)).data.ownerId == request.auth.uid;
+
+      allow update: if isSignedIn() &&
+        isValidId(invitationId) &&
+        isValidInvitation(incoming()) &&
+        existing().status == 'pending' &&
+        incoming().status in ['accepted', 'declined'] &&
+        incoming().groupId == existing().groupId &&
+        incoming().inviterUid == existing().inviterUid &&
+        incoming().inviteeEmail == existing().inviteeEmail &&
+        incoming().createdAt == existing().createdAt &&
+        isValidTimestamp(incoming().updatedAt) &&
+        request.auth.token.email != null &&
+        request.auth.token.email_verified == true &&
+        existing().inviteeEmail == request.auth.token.email &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(invitationId) && existing().inviterUid == request.auth.uid;
+    }
+
+    match /scamReports/{reportId} {
+      allow get: if isSignedIn() && isValidId(reportId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+        isValidId(reportId) &&
+        incoming().userId == request.auth.uid &&
+        incoming().moderationStatus == 'pending' &&
+        incoming().keys().hasAll(['userId', 'reportType', 'category', 'normalizedTarget', 'country', 'description', 'moderationStatus', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['userId', 'reportType', 'category', 'normalizedTarget', 'country', 'description', 'moderationStatus', 'createdAt', 'updatedAt']) &&
+        isValidTimestamp(incoming().createdAt) &&
+        isValidTimestamp(incoming().updatedAt) &&
+        isValidScamReport(incoming());
+
+      allow update: if isSignedIn() &&
+        isValidId(reportId) &&
+        isValidScamReport(incoming()) &&
+        isAdmin() &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        isValidTimestamp(incoming().updatedAt) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['moderationStatus', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(reportId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    match /scamAlerts/{alertId} {
+      allow get: if isSignedIn() && isValidId(alertId) && (existing().moderationStatus == 'approved' || isAdmin());
+      allow list: if isSignedIn() && (resource.data.moderationStatus == 'approved' || isAdmin());
+
+      allow create: if isSignedIn() &&
+        isValidId(alertId) &&
+        isAdmin() &&
+        incoming().keys().hasAll(['title', 'explanation', 'country', 'category', 'sourceType', 'reportCount', 'warningSigns', 'recommendedAction', 'moderationStatus', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['title', 'explanation', 'country', 'category', 'sourceType', 'reportCount', 'warningSigns', 'recommendedAction', 'moderationStatus', 'createdAt', 'updatedAt']) &&
+        isValidTimestamp(incoming().createdAt) &&
+        isValidTimestamp(incoming().updatedAt) &&
+        isValidScamAlert(incoming());
+
+      allow update: if isSignedIn() &&
+        isValidId(alertId) &&
+        isAdmin() &&
+        isValidScamAlert(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        isValidTimestamp(incoming().updatedAt);
+
+      allow delete: if isSignedIn() && isValidId(alertId) && isAdmin();
+    }
+  }
+}

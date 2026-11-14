@@ -1,0 +1,171 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user profile and security preferences.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID matching document ID" },
+        "displayName": { "type": "string", "description": "User full name" },
+        "email": { "type": "string", "description": "User email address" },
+        "photoURL": { "type": "string", "description": "Optional profile picture URL" },
+        "country": { "type": "string", "description": "ISO country code or country name" },
+        "language": { "type": "string", "enum": ["en", "ur", "hi", "ar"], "description": "Preferred UI and AI explanation language" },
+        "theme": { "type": "string", "enum": ["system", "light", "dark"], "description": "Preferred app theme" },
+        "subscriptionType": { "type": "string", "enum": ["free", "premium", "family"], "description": "Current subscription plan" },
+        "accountStatus": { "type": "string", "enum": ["active", "pending_deletion"], "description": "Account status" },
+        "saveHistory": { "type": "boolean", "description": "Whether scan reports are persisted to history" },
+        "notifSecurityAlerts": { "type": "boolean", "description": "Security alert notifications enabled" },
+        "notifFamilyWarnings": { "type": "boolean", "description": "Family shared warnings enabled" },
+        "notifTrends": { "type": "boolean", "description": "Scam trend notifications enabled" },
+        "notifEducational": { "type": "boolean", "description": "Educational reminder notifications enabled" },
+        "onboardingCompleted": { "type": "boolean", "description": "Whether user has completed onboarding" },
+        "completedLessons": { "type": "array", "description": "List of completed cybersecurity lesson IDs" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of account creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last profile update" }
+      },
+      "required": ["uid", "displayName", "country", "language", "theme", "subscriptionType", "accountStatus", "saveHistory", "createdAt", "updatedAt"]
+    },
+    "ScanRecord": {
+      "title": "ScanRecord",
+      "description": "Individual AI and threat-intelligence scan report stored in user's private scan history.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "scanType": { "type": "string", "enum": ["message", "website", "phone", "screenshot"], "description": "Scanner channel" },
+        "inputPreview": { "type": "string", "description": "Privacy-safe short preview of scanned input" },
+        "riskLevel": { "type": "string", "enum": ["low", "caution", "high", "critical", "unable_to_verify"], "description": "Calibrated risk level" },
+        "riskScore": { "type": "integer", "description": "Calibrated risk score 0..100" },
+        "confidence": { "type": "string", "enum": ["high", "medium", "low"], "description": "Assessment confidence" },
+        "category": { "type": "string", "description": "Detected threat or inquiry category" },
+        "summary": { "type": "string", "description": "Plain-language explanation" },
+        "warningSigns": { "type": "array", "description": "Observed warning sign strings" },
+        "evidenceObservations": { "type": "array", "description": "Observed evidence entries" },
+        "recommendation": { "type": "string", "description": "Recommended safety action" },
+        "verificationSteps": { "type": "array", "description": "Practical verification steps" },
+        "verificationStatus": { "type": "string", "enum": ["confirmed_malicious", "suspicious", "no_known_threat", "unable_to_verify"], "description": "Verification classification" },
+        "country": { "type": "string", "description": "User country context at scan time" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of scan creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of scan update" }
+      },
+      "required": ["userId", "scanType", "inputPreview", "riskLevel", "riskScore", "confidence", "category", "summary", "warningSigns", "evidenceObservations", "recommendation", "verificationSteps", "verificationStatus", "createdAt", "updatedAt"]
+    },
+    "FamilyGroup": {
+      "title": "FamilyGroup",
+      "description": "Family protection group supporting up to 5 members.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "description": "Group owner UID" },
+        "name": { "type": "string", "description": "Family group name" },
+        "memberUids": { "type": "array", "description": "List of member UIDs (max 5)" },
+        "memberLabels": { "type": "array", "description": "Display names matching members (max 5)" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["ownerId", "name", "memberUids", "memberLabels", "createdAt", "updatedAt"]
+    },
+    "SharedFamilyAlert": {
+      "title": "SharedFamilyAlert",
+      "description": "Privacy-safe warning shared within a family group.",
+      "type": "object",
+      "properties": {
+        "groupId": { "type": "string", "description": "Parent family group ID" },
+        "senderUid": { "type": "string", "description": "UID of member sharing alert" },
+        "senderName": { "type": "string", "description": "Display name of sender" },
+        "memberUids": { "type": "array", "description": "Denormalized member UIDs for rule evaluation" },
+        "scanType": { "type": "string", "description": "Original scan type" },
+        "riskLevel": { "type": "string", "description": "Risk level" },
+        "riskScore": { "type": "integer", "description": "Risk score 0..100" },
+        "category": { "type": "string", "description": "Scam category" },
+        "privacySafeSummary": { "type": "string", "description": "Redacted privacy-safe summary without raw message or screenshot" },
+        "warningSigns": { "type": "array", "description": "Key warning indicators" },
+        "recommendation": { "type": "string", "description": "Recommended protective action" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["groupId", "senderUid", "senderName", "memberUids", "scanType", "riskLevel", "riskScore", "category", "privacySafeSummary", "warningSigns", "recommendation", "createdAt", "updatedAt"]
+    },
+    "FamilyInvitation": {
+      "title": "FamilyInvitation",
+      "description": "Pending or resolved invitation to join a family group.",
+      "type": "object",
+      "properties": {
+        "groupId": { "type": "string", "description": "Target family group ID" },
+        "groupName": { "type": "string", "description": "Target family group name" },
+        "inviterUid": { "type": "string", "description": "Inviting owner UID" },
+        "inviterName": { "type": "string", "description": "Inviter display name" },
+        "inviteeEmail": { "type": "string", "description": "Invitee email address" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"], "description": "Invitation status" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["groupId", "groupName", "inviterUid", "inviterName", "inviteeEmail", "status", "createdAt", "updatedAt"]
+    },
+    "ScamReport": {
+      "title": "ScamReport",
+      "description": "User-submitted suspicious phone or scam report queued for moderation.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Submitting user UID" },
+        "reportType": { "type": "string", "enum": ["phone", "scam_pattern", "incorrect_scan"], "description": "Type of report" },
+        "category": { "type": "string", "description": "Scam category" },
+        "normalizedTarget": { "type": "string", "description": "Normalized phone or redacted target pattern" },
+        "country": { "type": "string", "description": "Country or region" },
+        "description": { "type": "string", "description": "User explanation without private PII" },
+        "moderationStatus": { "type": "string", "enum": ["pending", "approved", "rejected"], "description": "Moderation queue status" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "reportType", "category", "normalizedTarget", "country", "description", "moderationStatus", "createdAt", "updatedAt"]
+    },
+    "ScamAlert": {
+      "title": "ScamAlert",
+      "description": "Moderated and approved community or threat-intelligence scam alert.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Alert headline" },
+        "explanation": { "type": "string", "description": "Short explanation" },
+        "country": { "type": "string", "description": "Target country or Global" },
+        "category": { "type": "string", "description": "Alert category" },
+        "sourceType": { "type": "string", "enum": ["community_moderated", "verified_intelligence"], "description": "Distinguishes community reports from confirmed threat intel" },
+        "reportCount": { "type": "integer", "description": "Verified report count" },
+        "warningSigns": { "type": "array", "description": "Warning signs" },
+        "recommendedAction": { "type": "string", "description": "Recommended safety action" },
+        "moderationStatus": { "type": "string", "enum": ["approved", "archived"], "description": "Moderation state" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["title", "explanation", "country", "category", "sourceType", "reportCount", "warningSigns", "recommendedAction", "moderationStatus", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User account profiles and preferences, strictly owned by userId."
+    },
+    "/users/{userId}/scans/{scanId}": {
+      "schema": { "$ref": "#/entities/ScanRecord" },
+      "description": "User's private synchronized scan history."
+    },
+    "/familyGroups/{groupId}": {
+      "schema": { "$ref": "#/entities/FamilyGroup" },
+      "description": "Family protection groups (up to 5 members)."
+    },
+    "/familyGroups/{groupId}/sharedAlerts/{alertId}": {
+      "schema": { "$ref": "#/entities/SharedFamilyAlert" },
+      "description": "Privacy-safe warnings shared with family group members."
+    },
+    "/familyInvitations/{invitationId}": {
+      "schema": { "$ref": "#/entities/FamilyInvitation" },
+      "description": "Invitations sent by group owners to family member emails."
+    },
+    "/scamReports/{reportId}": {
+      "schema": { "$ref": "#/entities/ScamReport" },
+      "description": "User-submitted suspicious phone/scam reports pending moderation."
+    },
+    "/scamAlerts/{alertId}": {
+      "schema": { "$ref": "#/entities/ScamAlert" },
+      "description": "Approved community scam alerts and verified threat advisories."
+    }
+  }
+}
